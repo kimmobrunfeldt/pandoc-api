@@ -1,11 +1,16 @@
 var pandocCore = require('../core/pandoc');
+var validatePandocJob = require('../validation/pandoc-job').validate;
+var queue = require('../core/queue').connect();
 
 function* getPandoc(next) {
-    var result = yield pandocCore.addJob({
-        test: true
-    });
+    var pandocJob = {
+        url: this.query.url,
+        toFormat: 'html'
+    };
 
-    this.body = result.data;
+    validatePandocJob(pandocJob);
+    var job = yield pandocCore.addJob(pandocJob);
+    this.body = yield queue.wait(job.jobId);
 }
 
 module.exports = {

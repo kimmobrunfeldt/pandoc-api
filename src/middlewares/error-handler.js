@@ -5,7 +5,15 @@ function* errorHandler(next) {
     try {
         yield next;
     } catch (err) {
-        this.status = err.status || 500;
+        // This is needed.
+        // https://github.com/koajs/koa/issues/146
+        this.app.emit('error', err, this);
+
+        var status = err.status || 500;
+        if (err.name === 'ValidationError') {
+            status = 400;
+        }
+        this.status = status
 
         var errorResponse = {message: err.message};
         if (process.env.NODE_ENV !== 'production') {
@@ -13,13 +21,8 @@ function* errorHandler(next) {
         }
         this.body = {error: errorResponse};
 
-        // This is needed.
-        // https://github.com/koajs/koa/issues/146
-        this.app.emit('error', err, this);
-
         const doLog = process.env.NODE_ENV !== 'test' ||
             process.env.VERBOSE_TESTS === 'true';
-
         if (doLog && shouldLogStack(this.status)) {
             logger.error('Error in request', this.requestId);
             logger.error(err.stack);
