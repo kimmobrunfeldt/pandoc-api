@@ -1,5 +1,8 @@
 # Custom ignores
 
+!_worker/readme.md
+_worker/*
+
 .tmp
 .DS_Store
 

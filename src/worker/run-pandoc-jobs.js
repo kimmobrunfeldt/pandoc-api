@@ -5,15 +5,20 @@ var childProcess = require('child_process');
 var Promise = require('bluebird');
 var request = require('request');
 var logger = require('../logger')(__filename);
-var jobs = require('../core/queue').connect().jobs;
+var queue = require('../core/queue').connect();
 
 var workDir = path.join(__dirname, '../../_worker');
 
-jobs.process((job) => {
+queue.worker.process((job) => {
     logger.info('Processing job with id', job.jobId);
 
     var inputFileName = resolveInputFileName(job);
-    var stream = request(job.data.url);
+    var stream = request(job.data.url, {
+        encoding: null,
+        headers: {
+            'Accept-Charset': 'utf-8'
+        }
+    });
     var streamPromise = streamToPromise(stream);
     stream.pipe(fs.createWriteStream(path.join(workDir, inputFileName)));
 
@@ -32,19 +37,32 @@ jobs.process((job) => {
 
         logger.info('Running', command);
         return Promise.props({
-            exitCode: run(command, {cwd: workDir}),
+            process: run(command, {cwd: workDir}),
             outputFileName: outputFileName
         });
     })
     .then((result) => {
-        logger.info('pandoc exited with', result.exitCode);
-        if (result.exitCode !== 0) {
-            throw new Error('Failed to run command.');
+        logger.info('pandoc exited with', result.process.exitCode);
+        if (result.process.exitCode !== 0) {
+            throw new Error('Failed to run command: ' + result.process.stderr);
         }
 
-        return {
-            output: path.join(workDir, result.outputFileName)
-        };
+        queue.server.add({
+            id: job.jobId,
+            payload: path.join(workDir, result.outputFileName)
+        });
+    })
+    .catch(err => {
+        logger.error('Error while processing job', job.jobId);
+        logger.error(err);
+
+        queue.server.add({
+            id: job.jobId,
+            error: true,
+            payload: err.message
+        });
+
+        throw err;
     });
 });
 
@@ -74,14 +92,26 @@ function run(cmd, opts) {
 
         try {
             child = childProcess.spawn('/bin/bash', ['-c', cmd], {
-                cwd: opts.cwd,
-                stdio: opts.pipe ? 'inherit' : null
+                cwd: opts.cwd
             });
         } catch (e) {
             return Promise.reject(e);
         }
 
+        var stdoutBufs = [];
+        child.stdout.on('data', d => stdoutBufs.push(d));
+        var stderrBufs = [];
+        child.stderr.on('data', d => stderrBufs.push(d));
+
         child.once('error', reject);
-        child.once('close', resolve);
+        child.once('close', function(exitCode) {
+            var result = {
+                exitCode: exitCode,
+                stdout: Buffer.concat(stdoutBufs).toString(),
+                stderr: Buffer.concat(stderrBufs).toString()
+            };
+
+            resolve(result);
+        });
     });
 }

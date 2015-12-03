@@ -5,10 +5,6 @@ function* errorHandler(next) {
     try {
         yield next;
     } catch (err) {
-        // This is needed.
-        // https://github.com/koajs/koa/issues/146
-        this.app.emit('error', err, this);
-
         var status = err.status || 500;
         if (err.name === 'ValidationError') {
             status = 400;

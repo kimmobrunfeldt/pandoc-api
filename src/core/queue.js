@@ -1,86 +1,106 @@
+var EventEmitter = require('events');
 var _ = require('lodash');
 var createQueue = require('bull');
 var redis = require('./redis');
 var logger = require('../logger')(__filename);
+var CONST = require('../constants');
 
-var jobQueue = null;
+// Contains quite a lot of "wirings"
+// Task -> Worker Queue -> Server Queue -> push to results -> emit result
+// All this trouble because:
+// * bull fails if you try to add .process handler multiple times,
+//   that's why the results are piped via the results array and event emitter
+// * Worker can process the task before getResult is called, we need to save the
+//   results temporarily in array to prevent failing in those scenarios
+
+var resultEmitter = new EventEmitter();
+var results = [];
+var serverQueue = null;
+var workerQueue = null;
+
 function connect() {
-    var completed = [];
+    if (serverQueue === null && workerQueue === null) {
+        serverQueue = createQueue('server');
+        workerQueue = createQueue('worker');
+    }
 
-    if (jobQueue === null) {
-        var components = redis.parse();
-        jobQueue = createQueue('jobs', components.port, components.hostname, {
-            'auth_pass': components.password
+    function close() {
+        serverQueue.close().then(() => {
+            logger.info('server queue closed.');
         });
 
-        jobQueue.on('error', (err) => {
-            logger.error('Error in job queue:', err);
-        });
-
-        jobQueue.on('ready', () => {
-            logger.info('Job queue ready.');
-        });
-
-        jobQueue.on('failed', (job, err) => {
-            logger.error('Job', job.jobId, 'failed with error:', err);
-        });
-
-        jobQueue.on('cleaned', (job, type) => {
-            logger.info('Cleaned', job.length, type, 'jobs');
-        });
-
-        jobQueue.on('completed', (job, result) => {
-            console.log('completed1')
-            completed.push({
-                job: job,
-                result: result
-            });
+        workerQueue.close().then(() => {
+            logger.info('worker queue closed.');
         });
     }
 
-    function wait(jobId) {
-        return new Promise(function(resolve, reject) {
-            var timer = setTimeout(
-                reject.bind(null, new Error('Timeout')),
-                1000 * 10
-            );
-
-            function resolveWithCompleted() {
-                var found = _.find(completed, complete => complete.job.jobId === jobId);
-                if (found) {
-                    completed = _.reject(completed, complete => complete.job.jobId === jobId);
-                    clearTimeout(timer);
-                    jobQueue
-                    return resolve(found);
+    function getResult(jobId) {
+        return new Promise((resolve, reject) => {
+            function maybeResolveWithResult() {
+                var result = popResult(jobId);
+                if (result !== null) {
+                    resolve(result);
+                    return true;
                 }
+
+                return false;
             }
 
-            // Check if the task has been already completed
-            resolveWithCompleted();
+            if (maybeResolveWithResult()) {
+                return;
+            }
 
-            jobQueue.on('completed', (job, result) => {
-                console.log('completed2')
-                // This handler is called after the previously set handler,
-                // so we can rely that completed array already contains
-                // the job
-                if (jobId === job.jobId) {
-                    resolveWithCompleted();
-                }
+            resultEmitter.on('result', () => {
+                maybeResolveWithResult()
             });
+            setTimeout(() => reject(new Error('Job timeout')), CONST.WORKER_TIMEOUT);
         });
     }
 
-    function _close() {
-        jobQueue.close().then(() => {
-            logger.info('Job queue closed.');
+    function popResult(jobId) {
+        var index = _.findIndex(results, res => res.id === jobId);
+        if (index === -1) {
+            return null;
+        }
+
+        return results.splice(index, 1)[0];
+    }
+
+    function listenServerQueue() {
+        serverQueue.process(job => {
+            results.push(job.data);
+            resultEmitter.emit('result');
         });
     }
 
     return {
-        jobs: jobQueue,
-        wait: wait,
-        close: _close
+        getResult: getResult,
+        server: serverQueue,
+        worker: workerQueue,
+        close: close,
+        listenServerQueue: listenServerQueue
     };
+}
+
+function createQueue(name) {
+    var components = redis.parse();
+    newQueue = createQueue(name, components.port, components.hostname, {
+        'auth_pass': components.password
+    });
+
+    newQueue.on('error', (err) => {
+        logger.error('Error in queue', name, err);
+    });
+
+    newQueue.on('ready', () => {
+        logger.info('Queue', name, 'ready.');
+    });
+
+    newQueue.on('cleaned', (job, type) => {
+        logger.info('Cleaned', job.length, type, 'jobs in queue', name);
+    });
+
+    return newQueue;
 }
 
 module.exports = {

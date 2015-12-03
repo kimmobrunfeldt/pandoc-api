@@ -1,10 +1,11 @@
 var _ = require('lodash');
 var Promise = require('bluebird');
-var jobs = require('../core/queue').connect().jobs;
+var queue = require('../core/queue').connect();
+var CONST = require('../constants');
 
 var addJob = Promise.coroutine(function* addJob(job) {
-    var newJob = yield jobs.add(job, {
-        timeout: 1000 * 10
+    var newJob = yield queue.worker.add(job, {
+        timeout: CONST.WORKER_TIMEOUT
     });
 
     var pandocJob = _.merge({
