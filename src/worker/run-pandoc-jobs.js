@@ -14,6 +14,35 @@ queue.worker.process((job, jobDone) => {
     logger.info('Processing job with id', job.jobId);
 
     logger.info('Downloading url:', job.data.url, '..');
+    downloadFile(job)
+    .tap(() => logger.info('Downloaded.'))
+    .then(() => runPandoc(job))
+    .then((result) => {
+        logger.info('pandoc exited with', result.process.exitCode);
+        if (result.process.exitCode !== 0) {
+            throw new Error('Failed to run command: ' + result.process.stderr);
+        }
+
+        return sendResult({
+            id: job.jobId,
+            payload: path.join(workDir, result.outputFileName)
+        });
+    })
+    .catch(err => {
+        logger.error('Error while processing job', job.jobId);
+        logger.error(err);
+
+        return sendResult({
+            id: job.jobId,
+            error: true,
+            status: err.status,
+            payload: err.message
+        });
+    })
+    .finally(jobDone);
+});
+
+function downloadFile(job) {
     var req = request(job.data.url, {
         encoding: null,
         headers: {
@@ -32,7 +61,7 @@ queue.worker.process((job, jobDone) => {
         req.on('error', reject);
     });
 
-    responsePromise.then(function(response) {
+    return responsePromise.then(function(response) {
         if (response.statusCode !== 200) {
             // Explicitly close write stream just in case;
             writeStream.end();
@@ -44,48 +73,29 @@ queue.worker.process((job, jobDone) => {
         }
 
         return writeStreamPromise;
-    })
-    .tap(() => logger.info('Downloaded.'))
-    .then(() => {
-        var inputFileName = resolveInputFileName(job);
-        var outputFileName = resolveOutputFileName(job);
-        var command = [
-            'docker run -v `pwd`:/source jagregory/pandoc',
-            '-t html -s',
-            '-o ' + outputFileName,
-            inputFileName
-        ].join(' ');
+    });
+}
 
-        logger.info('Running', command);
-        return Promise.props({
-            process: run(command, {cwd: workDir}),
-            outputFileName: outputFileName
-        });
-    })
-    .then((result) => {
-        logger.info('pandoc exited with', result.process.exitCode);
-        if (result.process.exitCode !== 0) {
-            throw new Error('Failed to run command: ' + result.process.stderr);
-        }
+function runPandoc(job) {
+    var inputFileName = resolveInputFileName(job);
+    var outputFileName = resolveOutputFileName(job);
+    var command = [
+        'docker run -v `pwd`:/source jagregory/pandoc',
+        '-t html -s',
+        '-o ' + outputFileName,
+        inputFileName
+    ].join(' ');
 
-        queue.server.add({
-            id: job.jobId,
-            payload: path.join(workDir, result.outputFileName)
-        });
-    })
-    .catch(err => {
-        logger.error('Error while processing job', job.jobId);
-        logger.error(err);
+    logger.info('Running', command);
+    return Promise.props({
+        process: run(command, {cwd: workDir}),
+        outputFileName: outputFileName
+    });
+}
 
-        queue.server.add({
-            id: job.jobId,
-            error: true,
-            status: err.status,
-            payload: err.message
-        });
-    })
-    .finally(jobDone);
-});
+function sendResult(result) {
+    return queue.server.add(result);
+}
 
 function resolveInputFileName(job) {
     return job.jobId + extensionFromUrl(job.data.url);
