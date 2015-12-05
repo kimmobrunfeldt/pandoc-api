@@ -3,30 +3,51 @@ var path = require('path');
 var nodeUrl = require('url');
 var childProcess = require('child_process');
 var Promise = require('bluebird');
-var request = require('request');
+var request = Promise.promisifyAll(require('request'));
 var logger = require('../logger')(__filename);
+var CONST = require('../constants');
 var queue = require('../core/queue').connect();
 
 var workDir = path.join(__dirname, '../../_worker');
 
-queue.worker.process((job) => {
+queue.worker.process((job, jobDone) => {
     logger.info('Processing job with id', job.jobId);
 
-    var inputFileName = resolveInputFileName(job);
-    var stream = request(job.data.url, {
+    logger.info('Downloading url:', job.data.url, '..');
+    var req = request(job.data.url, {
         encoding: null,
         headers: {
             'Accept-Charset': 'utf-8'
-        }
+        },
+        timeout: CONST.REQUEST_TIMEOUT
     });
-    var streamPromise = streamToPromise(stream);
-    stream.pipe(fs.createWriteStream(path.join(workDir, inputFileName)));
 
-    logger.info('Downloading url:', job.data.url, '..');
+    var inputFileName = resolveInputFileName(job);
+    var writeStream = fs.createWriteStream(path.join(workDir, inputFileName));
+    req.pipe(writeStream);
 
-    return Promise.resolve(streamToPromise)
+    var writeStreamPromise = writeStreamToPromise(writeStream);
+    var responsePromise = new Promise((resolve, reject) => {
+        req.on('response', resolve);
+        req.on('error', reject);
+    });
+
+    responsePromise.then(function(response) {
+        if (response.statusCode !== 200) {
+            // Explicitly close write stream just in case;
+            writeStream.end();
+
+            var message = 'Remote responded with status ' + response.statusCode;
+            var err = new Error(message);
+            err.status = response.statusCode;
+            throw err;
+        }
+
+        return writeStreamPromise;
+    })
     .tap(() => logger.info('Downloaded.'))
     .then(() => {
+        var inputFileName = resolveInputFileName(job);
         var outputFileName = resolveOutputFileName(job);
         var command = [
             'docker run -v `pwd`:/source jagregory/pandoc',
@@ -59,11 +80,11 @@ queue.worker.process((job) => {
         queue.server.add({
             id: job.jobId,
             error: true,
+            status: err.status,
             payload: err.message
         });
-
-        throw err;
-    });
+    })
+    .finally(jobDone);
 });
 
 function resolveInputFileName(job) {
@@ -79,10 +100,10 @@ function extensionFromUrl(url) {
     return path.extname(urlPath);
 }
 
-function streamToPromise(stream) {
+function writeStreamToPromise(writeStream) {
     return new Promise(function(resolve, reject) {
-        stream.on('end', resolve);
-        stream.on('error', reject);
+        writeStream.on('finish', resolve);
+        writeStream.on('error', reject);
     });
 }
 

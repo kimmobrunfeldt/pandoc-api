@@ -1,4 +1,5 @@
 var Promise = require('bluebird');
+var _ = require('lodash');
 var fs = Promise.promisifyAll(require('fs'));
 var path = require('path');
 var pandocCore = require('../core/pandoc');
@@ -18,7 +19,13 @@ function* getPandoc(next) {
     var result = yield queue.getResult(job.id);;
     if (result.error) {
         var err = new Error(result.payload);
-        err.status = 500;
+        if (_.isNumber(result.status)) {
+            // Remote server returned a HTTP error when downloading file
+            err.status = 502;
+        } else {
+            err.status = 500;
+        }
+
         throw err;
     }
 
