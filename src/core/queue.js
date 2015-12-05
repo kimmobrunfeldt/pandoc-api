@@ -76,9 +76,10 @@ function connect() {
     }
 
     function listenServerQueue() {
-        serverQueue.process(job => {
+        serverQueue.process((job, jobDone) => {
             results.push(job.data);
             resultEmitter.emit('result');
+            jobDone();
         });
     }
 
