@@ -36,24 +36,33 @@ function connect() {
 
     function getResult(jobId) {
         return new Promise((resolve, reject) => {
+            var timer;
+
             function maybeResolveWithResult() {
                 var result = popResult(jobId);
                 if (result !== null) {
                     resolve(result);
+                    clean();
                     return true;
                 }
 
                 return false;
             }
 
+            function clean() {
+                // Remove listener to prevent memory leaks
+                resultEmitter.removeListener('result', maybeResolveWithResult);
+                if (timer) {
+                    clearTimeout(timer);
+                }
+            }
+
             if (maybeResolveWithResult()) {
                 return;
             }
 
-            resultEmitter.on('result', () => {
-                maybeResolveWithResult()
-            });
-            setTimeout(() => reject(new Error('Job timeout')), CONST.WORKER_TIMEOUT);
+            resultEmitter.on('result', maybeResolveWithResult);
+            timer = setTimeout(() => reject(new Error('Job timeout')), CONST.WORKER_TIMEOUT);
         });
     }
 
