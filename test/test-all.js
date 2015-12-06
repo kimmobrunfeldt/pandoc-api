@@ -16,6 +16,10 @@ describe('functional', () => {
 
     before(() => {
         logger.info('Starting worker..');
+        // We are not waiting until worker has started
+        // The test cases will not be able to finish their requests before
+        // worker is ready to process.
+        // In other words, in practice this works as it should
         _worker = worker.start();
 
         logger.info('Flushing redis db..')
