@@ -4,7 +4,8 @@ var _ = require('lodash');
 
 const COLORIZE = process.env.NODE_ENV === 'development';
 
-function createLogger(filePath) {
+function createLogger(filePath, opts) {
+    opts = opts || {};
     var fileName = path.basename(filePath);
 
     const logger = new winston.Logger({
@@ -15,7 +16,7 @@ function createLogger(filePath) {
         })]
     });
 
-    _setLevelForTransports(logger, process.env.LOG_LEVEL || 'info');
+    _setLevelForTransports(logger, opts.logLevel || process.env.LOG_LEVEL || 'info');
     return logger;
 }
 

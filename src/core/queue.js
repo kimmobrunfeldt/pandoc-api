@@ -1,6 +1,6 @@
 var EventEmitter = require('events');
 var _ = require('lodash');
-var createQueue = require('bull');
+var Queue = require('bull');
 var redis = require('./redis');
 var logger = require('../logger')(__filename);
 var CONST = require('../constants');
@@ -76,7 +76,11 @@ function connect() {
     }
 
     function listenServerQueue() {
+        logger.debug('Listening server queue..');
+
         serverQueue.process((job, jobDone) => {
+            logger.debug('Server got a response from worker, job id', job.jobId);
+
             results.push(job.data);
             resultEmitter.emit('result');
             jobDone();
@@ -94,8 +98,16 @@ function connect() {
 
 function createQueue(name) {
     var components = redis.parse();
-    newQueue = createQueue(name, components.port, components.hostname, {
-        'auth_pass': components.password
+    // IMPORTANT: these options must be in sync with the redis.js
+    var newQueue = Queue(name, {
+        redis: {
+            host: components.hostname,
+            port: components.port,
+            DB: components.database,
+            opts: {
+                'auth_pass': components.password
+            }
+        }
     });
 
     newQueue.on('error', (err) => {

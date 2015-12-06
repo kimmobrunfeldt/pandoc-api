@@ -10,37 +10,41 @@ var queue = require('../core/queue').connect();
 
 var workDir = path.join(__dirname, '../../_worker');
 
-queue.worker.process((job, jobDone) => {
-    logger.info('Processing job with id', job.jobId);
+function start() {
+    queue.worker.process((job) => {
+        logger.info('Processing job with id', job.jobId);
 
-    logger.info('Downloading url:', job.data.url, '..');
-    downloadFile(job)
-    .tap(() => logger.info('Downloaded.'))
-    .then(() => runPandoc(job))
-    .then((result) => {
-        logger.info('pandoc exited with', result.process.exitCode);
-        if (result.process.exitCode !== 0) {
-            throw new Error('Failed to run command: ' + result.process.stderr);
-        }
+        logger.info('Downloading url:', job.data.url, '..');
+        return downloadFile(job)
+        .tap(() => logger.info('Downloaded.'))
+        .then(() => runPandoc(job))
+        .then((result) => {
+            logger.info('pandoc exited with', result.process.exitCode);
+            if (result.process.exitCode !== 0) {
+                throw new Error('Failed to run command: ' + result.process.stderr);
+            }
 
-        return sendResult({
-            id: job.jobId,
-            payload: path.join(workDir, result.outputFileName)
-        });
-    })
-    .catch(err => {
-        logger.error('Error while processing job', job.jobId);
-        logger.error(err);
+            return sendResult({
+                id: job.jobId,
+                payload: path.join(workDir, result.outputFileName)
+            });
+        })
+        .catch(err => {
+            logger.error('Error while processing job', job.jobId);
+            logger.error(err);
 
-        return sendResult({
-            id: job.jobId,
-            error: true,
-            status: err.status,
-            payload: err.message
-        });
-    })
-    .finally(jobDone);
-});
+            return sendResult({
+                id: job.jobId,
+                error: true,
+                status: err.status,
+                payload: err.message
+            });
+        })
+        .tap(() => logger.info('Job', job.jobId, 'processed.'));
+    });
+
+    return queue.worker;
+}
 
 function downloadFile(job) {
     var req = request(job.data.url, {
@@ -146,3 +150,12 @@ function run(cmd, opts) {
         });
     });
 }
+
+if (require.main === module) {
+    // Script is directly executed
+    start();
+}
+
+module.exports = {
+    start: start
+};

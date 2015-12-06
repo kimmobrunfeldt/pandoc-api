@@ -25,3 +25,10 @@ try {
 }
 
 process.env.PORT = process.env.PORT || 5000;
+
+if (process.env.VERBOSE_TESTS === 'true') {
+    process.env.LOG_LEVEL = 'silly';
+}
+
+console.log('LOG_LEVEL=' + process.env.LOG_LEVEL);
+console.log('REDIS_URL=' + process.env.REDIS_URL);

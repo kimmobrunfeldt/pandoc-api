@@ -1,3 +1,4 @@
+// node_redis must be used as long as bull relies on it
 var Redis = require('redis');
 var redisUrl = require('redis-url');
 var logger = require('../logger')(__filename);
@@ -17,6 +18,13 @@ function connect() {
 
         redis.on('ready', function() {
             logger.info('Connected to redis.');
+        });
+
+        redis.select(components.database, (err) => {
+            if (err) {
+                logger.error('Error when selecting redis database', components.database);
+                logger.error(err);
+            }
         });
     }
 

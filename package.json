@@ -24,11 +24,15 @@
     "winston": "2.1.x"
   },
   "scripts": {
-    "test": "source .env-test && npm test",
+    "test": "source .env-test && mocha",
     "start": "source .env && nodemon --watch ./src -e js src/index.js",
     "worker": "source .env && nodemon --watch ./src -e js ./src/worker/run-pandoc-jobs.js"
   },
   "devDependencies": {
-    "nodemon": "^1.8.1"
+    "chai": "^3.4.1",
+    "koa-static": "^1.5.2",
+    "mocha": "^2.3.4",
+    "nodemon": "^1.8.1",
+    "supertest": "^1.1.0"
   }
 }
