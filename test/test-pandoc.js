@@ -4,12 +4,12 @@ var createRequest = require('./utils/request');
 var request = createRequest();
 
 function testPandoc() {
-    describe('/api/v1/pandoc', function() {
+    describe('/convert', function() {
         this.timeout(5000);
 
         it('markdown to html', () => {
             return request
-            .get('/api/v1/pandoc')
+            .get('/convert')
             .query({url: utils.createTestUrl('basic.md')})
             .expect(200)
             .expect(res => {

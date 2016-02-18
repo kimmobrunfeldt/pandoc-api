@@ -1,8 +1,7 @@
 require('../src/setup-env-vars');
 
 var path = require('path');
-var Promise = require('bluebird');
-var worker = require('../src/worker/run-pandoc-jobs');
+var BPromise = require('bluebird');
 var utils = require('./utils');
 var createTestApp = require('./utils/server');
 var testPandoc = require('./test-pandoc');
@@ -11,30 +10,17 @@ var logger = require('../src/logger')(__filename);
 var TEST_WEB_ROOT = path.join(__dirname, 'data');
 
 describe('functional', () => {
-    var _worker;
     var _testServer;
 
     before(() => {
-        logger.info('Starting worker..');
-        // We are not waiting until worker has started
-        // The test cases will not be able to finish their requests before
-        // worker is ready to process.
-        // In other words, in practice this works as it should
-        _worker = worker.start();
-
-        logger.info('Flushing redis db..')
-        return utils.flushRedis()
-            .tap(() => logger.info('Redis keys deleted.'))
-            .then(startServer)
-            .tap(testServer => {
-                _testServer = testServer;
-            });
+        logger.info('Starting local test file server..')
+        return startServer()
+        .tap(testServer => {
+            _testServer = testServer;
+        });
     });
 
     after(() => {
-        logger.info('Closing worker..');
-        _worker.close();
-
         logger.info('Closing test file server..');
         _testServer.close();
     });
@@ -43,7 +29,7 @@ describe('functional', () => {
 });
 
 function startServer() {
-    return new Promise((resolve, reject) => {
+    return new BPromise((resolve, reject) => {
         var testApp = createTestApp(TEST_WEB_ROOT);
         var testServer = testApp.listen(process.env.TEST_FILE_SERVER_PORT, (err) => {
             if (err) {

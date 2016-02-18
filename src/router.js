@@ -1,10 +1,7 @@
 var createRouter = require('koa-router')
-var pandocApi = require('./api/pandoc');
+var pandoc = require('./http/pandoc');
 
-var router = createRouter({
-    prefix: '/api/v1'
-});
-
-router.get('/pandoc', pandocApi.getPandoc);
+var router = createRouter();
+router.get('/convert', pandoc.getDocument);
 
 module.exports = router;

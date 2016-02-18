@@ -20,7 +20,7 @@ function* errorHandler(next) {
         const doLog = process.env.NODE_ENV !== 'test' ||
             process.env.VERBOSE_TESTS === 'true';
         if (doLog && shouldLogStack(this.status)) {
-            logger.error('Error in request id', this.requestId);
+            logger.error('Error in request:');
             logger.error(err.stack);
         }
     }

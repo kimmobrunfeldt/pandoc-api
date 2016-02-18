@@ -9,11 +9,11 @@
 
 ## Environments
 
-* `qa` https://pandoc-api-qa.herokuapp.com/api/v1
+* `qa` https://pandoc-api-qa.herokuapp.com/
 
     Used for playing around and testing.
 
-* `prod` https://pandoc-api-prod.herokuapp.com/api/v1
+* `prod` https://pandoc-api-prod.herokuapp.com/
 
     Stable.
 
@@ -21,13 +21,13 @@
 
 All API endpoints. They are relative to the base urls listed in [environments](#environments).
 
-### `GET /pandoc` Convert document with Pandoc
+### `GET /convert` Convert document with Pandoc
 
-**Parameters**
+**Query parameters**
 
 Name           | Type      | Description
 -------------- | --------- | -----------
-**source**     | *String*  |  **Required.** Url to the input document.
+**url**        | *String*  |  **Required.** Url to the input document.
 
 ## Error handling
 
