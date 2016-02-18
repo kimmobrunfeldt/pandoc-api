@@ -1,11 +1,11 @@
-var fs = require('fs');
+var BPromise = require('bluebird');
+var fs = BPromise.promisifyAll(require('fs'));
 var path = require('path');
 var nodeUrl = require('url');
 var childProcess = require('child_process');
 var path = require('path')
 var _ = require('lodash');
-var BPromise = require('bluebird');
-var request = BPromise.promisifyAll(require('request'));
+var request = require('request');
 var logger = require('../logger')(__filename);
 var CONST = require('../constants');
 
@@ -27,6 +27,20 @@ var convertDocument = BPromise.coroutine(function* convertDocument(opts) {
         filepath: path.join(workDir, result.outputFileName)
     };
 });
+
+// Cleans temporary files from a conversion operation
+function clean(opts) {
+    logger.info('Cleaning files from conversion', opts.id, '..');
+    var inputFilePath = path.join(workDir, resolveInputFileName(opts.id, opts.url));
+    var outputFilePath = path.join(workDir, resolveOutputFileName(opts.id, opts.toFormat));
+
+    return fs.unlinkAsync(inputFilePath)
+    .then(() => fs.unlinkAsync(outputFilePath))
+    .catch(err => {
+        logger.error('Unable to clean files:', err);
+        throw err;
+    });
+}
 
 function downloadFile(id, url) {
     var req = request(url, {
@@ -130,5 +144,6 @@ function run(cmd, opts) {
 }
 
 module.exports = {
-    convertDocument: convertDocument
+    convertDocument: convertDocument,
+    clean: clean
 };

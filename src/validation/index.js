@@ -1,6 +1,6 @@
 var Joi = require('joi');
 
-function validateObject(obj, schema) {
+function assertObject(obj, schema) {
     var validation = Joi.validate(obj, schema);
     if (validation.error) {
         throw validation.error;
@@ -10,5 +10,5 @@ function validateObject(obj, schema) {
 }
 
 module.exports = {
-    validateObject: validateObject
+    assertObject
 };
