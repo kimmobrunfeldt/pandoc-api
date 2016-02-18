@@ -27,7 +27,7 @@ function* getDocument(next) {
         throw err;
     }
 
-    setTimeout(() => pandocCore.clean(opts), 30 * 1000);
+    setTimeout(() => pandocCore.clean(opts), 3 * 1000);
 
     this.type = opts.toFormat;
     this.body = fs.createReadStream(result.filepath);

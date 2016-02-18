@@ -7,6 +7,7 @@ var path = require('path')
 var _ = require('lodash');
 var request = require('request');
 var logger = require('../logger')(__filename);
+var markdownCore = require('./markdown');
 var CONST = require('../constants');
 
 var workDir = path.join(__dirname, '../../_files');
@@ -16,6 +17,9 @@ var convertDocument = BPromise.coroutine(function* convertDocument(opts) {
     yield downloadFile(opts.id, opts.url);
     logger.info('Downloaded.');
 
+    logger.info('Transforming markdown..');
+    yield transformMarkdownFile(opts);
+
     var result = yield runPandoc(opts);
     logger.info('pandoc exited with', result.process.exitCode);
 
@@ -24,7 +28,7 @@ var convertDocument = BPromise.coroutine(function* convertDocument(opts) {
     }
 
     return {
-        filepath: path.join(workDir, result.outputFileName)
+        filepath: path.join(workDir, result.outputFilename)
     };
 });
 
@@ -51,8 +55,8 @@ function downloadFile(id, url) {
         timeout: CONST.REQUEST_TIMEOUT
     });
 
-    var inputFileName = resolveInputFileName(id, url);
-    var writeStream = fs.createWriteStream(path.join(workDir, inputFileName));
+    var inputFilename = resolveInputFileName(id, url);
+    var writeStream = fs.createWriteStream(path.join(workDir, inputFilename));
     req.pipe(writeStream);
 
     var writeStreamPromise = writeStreamToPromise(writeStream);
@@ -76,20 +80,33 @@ function downloadFile(id, url) {
     });
 }
 
+function transformMarkdownFile(opts) {
+    var inputFilename = resolveInputFileName(opts.id, opts.url);
+    var inputFilepath = path.join(workDir, inputFilename);
+
+    return fs.readFileAsync(inputFilepath, {encoding: 'utf8'})
+    .then(text => {
+        // Remove the file path from url
+        var fullUrl = nodeUrl.resolve(opts.url, '.');
+        var newText = markdownCore.resolveLinks(fullUrl, text);
+        return fs.writeFileAsync(inputFilepath, newText, {encoding: 'utf8'});
+    });
+}
+
 function runPandoc(opts) {
-    var inputFileName = resolveInputFileName(opts.id, opts.url);
-    var outputFileName = resolveOutputFileName(opts.id, opts.toFormat);
+    var inputFilename = resolveInputFileName(opts.id, opts.url);
+    var outputFilename = resolveOutputFileName(opts.id, opts.toFormat);
     var command = [
         'docker run -v `pwd`:/source jagregory/pandoc',
         '-t html -s',
-        '-o ' + outputFileName,
-        inputFileName
+        '-o ' + outputFilename,
+        inputFilename
     ].join(' ');
 
     logger.info('Running', command);
     return BPromise.props({
         process: run(command, {cwd: workDir}),
-        outputFileName: outputFileName
+        outputFilename: outputFilename
     });
 }
 
