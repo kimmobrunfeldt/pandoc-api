@@ -16,17 +16,7 @@ Documentation for developers.
 
     The web API layer.
 
-* Redis
-
-    [bull](https://github.com/OptimalBits/bull) as a message queue.
-
 * Pandoc
-
-    Worker.
-
-* [Google Cloud Storage](https://cloud.google.com/storage/)
-
-    File storage. Data is shared here between API layer and worker.
 
 ## Compiling Pandoc
 
@@ -48,4 +38,4 @@ Inside the box:
 
     Needed in pandoc installation via `cabal`
 
-*
+...

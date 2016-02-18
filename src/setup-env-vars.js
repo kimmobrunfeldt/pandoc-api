@@ -7,10 +7,6 @@ function validate() {
         console.error('Set NODE_ENV to one of:', validEnvs.join(', '));
         throw new Error('NODE_ENV is not set');
     }
-
-    if (!process.env.REDIS_URL) {
-        throw new Error('REDIS_URL is not set');
-    }
 }
 
 try {
@@ -31,4 +27,3 @@ if (process.env.VERBOSE_TESTS === 'true') {
 }
 
 console.log('LOG_LEVEL=' + process.env.LOG_LEVEL);
-console.log('REDIS_URL=' + process.env.REDIS_URL);
