@@ -5,8 +5,6 @@ var koaCompress = require('koa-compress');
 var errorHandler = require('./middlewares/error-handler');
 var requestId = require('./middlewares/request-id');
 var router = require('./router');
-var queue = require('./core/queue').connect();
-queue.listenServerQueue();
 
 function createApp() {
     var app = koa();

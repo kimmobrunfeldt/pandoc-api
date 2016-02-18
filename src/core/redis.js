@@ -6,10 +6,7 @@ var logger = require('../logger')(__filename);
 var redis = null;
 function connect() {
     if (redis === null) {
-        var components = parse();
-        redis = Redis.createClient(components.port, components.hostname, {
-            'auth_pass': components.password
-        });
+        redis = Redis.createClient(process.env.REDIS_URL);
 
         redis.on('error', function(err) {
             logger.error('Error occured with redis:');
@@ -20,6 +17,7 @@ function connect() {
             logger.info('Connected to redis.');
         });
 
+        var components = redisUrl.parse(process.env.REDIS_URL);
         redis.select(components.database, (err) => {
             if (err) {
                 logger.error('Error when selecting redis database', components.database);
@@ -31,11 +29,6 @@ function connect() {
     return redis;
 }
 
-function parse() {
-    return redisUrl.parse(process.env.REDIS_URL);
-}
-
 module.exports = {
-    connect: connect,
-    parse: parse
+    connect: connect
 };

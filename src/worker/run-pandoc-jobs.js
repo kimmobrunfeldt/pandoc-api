@@ -5,45 +5,52 @@ var childProcess = require('child_process');
 var Promise = require('bluebird');
 var request = Promise.promisifyAll(require('request'));
 var logger = require('../logger')(__filename);
-var CONST = require('../constants');
+var redis = require('../core/redis').connect();
 var queue = require('../core/queue').connect();
+var CONST = require('../constants');
 
 var workDir = path.join(__dirname, '../../_worker');
 
 function start() {
-    queue.worker.process((job) => {
-        logger.info('Processing job with id', job.jobId);
-
-        logger.info('Downloading url:', job.data.url, '..');
-        return downloadFile(job)
-        .tap(() => logger.info('Downloaded.'))
-        .then(() => runPandoc(job))
-        .then((result) => {
-            logger.info('pandoc exited with', result.process.exitCode);
-            if (result.process.exitCode !== 0) {
-                throw new Error('Failed to run command: ' + result.process.stderr);
-            }
-
-            return sendResult({
-                id: job.jobId,
-                payload: path.join(workDir, result.outputFileName)
-            });
-        })
-        .catch(err => {
-            logger.error('Error while processing job', job.jobId);
-            logger.error(err);
-
-            return sendResult({
-                id: job.jobId,
-                error: true,
-                status: err.status,
-                payload: err.message
-            });
-        })
-        .tap(() => logger.info('Job', job.jobId, 'processed.'));
+    queue.receiveMessage()
+    .then(job => {
+        logger.info('Processing job', job);
+        return processJob(job)
+            .then(result => sendResult(result))
+            .tap(() => logger.info('Job', job.jobId, 'processed.'));
     });
 
     return queue.worker;
+}
+
+function processJob(job) {
+    logger.info('Downloading url:', job.data.url, '..');
+
+    return downloadFile(job)
+    .tap(() => logger.info('Downloaded.'))
+    .then(() => runPandoc(job))
+    .then((result) => {
+        logger.info('pandoc exited with', result.process.exitCode);
+        if (result.process.exitCode !== 0) {
+            throw new Error('Failed to run command: ' + result.process.stderr);
+        }
+
+        return {
+            id: job.jobId,
+            payload: path.join(workDir, result.outputFileName)
+        };
+    })
+    .catch(err => {
+        logger.error('Error while processing job', job.jobId);
+        logger.error(err);
+
+        return {
+            id: job.jobId,
+            error: true,
+            status: err.status,
+            payload: err.message
+        };
+    });
 }
 
 function downloadFile(job) {
